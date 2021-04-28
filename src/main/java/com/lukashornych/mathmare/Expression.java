@@ -10,7 +10,7 @@ import java.util.Random;
 /**
  * Single randomly generated math expression to be resolved by player.
  *
- * @author Lukáš Hornych, netreach.me 2021
+ * @author Lukáš Hornych 2021
  */
 @Data
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)

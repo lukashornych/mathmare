@@ -10,7 +10,7 @@ import static org.lwjgl.glfw.GLFW.*;
 /**
  * Game over scene telling player that he/she lost.
  *
- * @author Lukáš Hornych, netreach.me 2021
+ * @author Lukáš Hornych 2021
  */
 @Data
 public class GameOverScene implements Scene {

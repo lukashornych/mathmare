@@ -10,7 +10,7 @@ import static org.lwjgl.glfw.GLFW.*;
 /**
  * Main menu scene, initial scene.
  *
- * @author Lukáš Hornych, netreach.me 2021
+ * @author Lukáš Hornych 2021
  */
 @Data
 public class MainMenuScene implements Scene {

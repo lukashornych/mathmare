@@ -11,7 +11,7 @@ import static org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE;
 /**
  * Scene telling player that he/she successfully escaped maze.
  *
- * @author Lukáš Hornych, netreach.me 2021
+ * @author Lukáš Hornych 2021
  */
 @Data
 public class EscapedScene implements Scene {

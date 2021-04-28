@@ -44,14 +44,32 @@ public class Expression {
         return result == getExpectedResult();
     }
 
+    /**
+     * Creates string from this expression to be displayed to solve
+     */
+    public String toSolvableString() {
+        final StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%1$2d", operandA));
+        switch (operator) {
+            case PLUS: sb.append(" + "); break;
+            case MINUS: sb.append(" - "); break;
+        }
+        sb.append(String.format("%1$2d", operandB));
+        sb.append(" = ");
+
+        return sb.toString();
+    }
+
 
     private static int generateOperand() {
         return RANDOM.nextInt(30);
     }
 
     private static Operator generateOperator() {
-        final Operator[] allOperators = Operator.values();
-        return allOperators[RANDOM.nextInt(allOperators.length)];
+        return Operator.PLUS;
+        // todo
+//        final Operator[] allOperators = Operator.values();
+//        return allOperators[RANDOM.nextInt(allOperators.length)];
     }
 
     private static int calculateExpectedResult(int operandA, int operandB, Operator operator) {
@@ -61,14 +79,11 @@ public class Expression {
         if (operator.equals(Operator.MINUS)) {
             return operandA - operandB;
         }
-        if (operator.equals(Operator.TIMES)) {
-            return operandA * operandB;
-        }
 
         throw new IllegalArgumentException("Unsupported operator");
     }
 
     public enum Operator {
-        PLUS, MINUS, TIMES
+        PLUS, MINUS
     }
 }

@@ -51,8 +51,7 @@ public class Window {
 
         glfwDefaultWindowHints();
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-        // todo: start in fullscreen mode
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
         id = glfwCreateWindow(width, height, "Mathmare", NULL, NULL);
         if (id == NULL)

@@ -82,6 +82,13 @@ public class InputManager {
     }
 
     /**
+     * Resets states of all keys
+     */
+    public void resetKeyStates() {
+        keysPressed = new boolean[349];
+    }
+
+    /**
      * Checks if the mouse button is pressed at the moment
      *
      * @param mouseButton GLFW mouse button

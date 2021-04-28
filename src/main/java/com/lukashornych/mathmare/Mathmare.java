@@ -1,5 +1,7 @@
 package com.lukashornych.mathmare;
 
+import lwjglutils.OGLUtils;
+
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 
@@ -35,6 +37,8 @@ public class Mathmare {
         float deltaTime = -1.0f;
 
         while (!glfwWindowShouldClose(window.getId())) {
+            glViewport(0, 0, window.getWidth(), window.getHeight());
+
             glfwPollEvents();
 
             glClearColor(0.0f, 0.0f, 0.0f, 0.0f);

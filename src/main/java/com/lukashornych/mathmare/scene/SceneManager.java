@@ -3,6 +3,9 @@ package com.lukashornych.mathmare.scene;
 import com.lukashornych.mathmare.GameManager;
 import lombok.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Manages all existing {@link Scene}s in game like switching between them and so on.
  *
@@ -22,19 +25,26 @@ public class SceneManager {
     protected Scene currentScene;
 
     /**
+     * Scenes context. Can be used freely by any scene to pass data between several scenes.
+     */
+    protected Map<String, Object> context;
+
+
+    /**
      * Creates uninitialized manager. The {@link #init()} must be called before using
      *
      * @param gameManager
      */
     public SceneManager(@NonNull GameManager gameManager) {
         this.gameManager = gameManager;
+        this.context = new HashMap<>();
     }
 
     /**
      * Initializes this manager. Also sets default scene as active.
      */
     public void init() {
-        switchScene(SceneIdentifier.MAZE_SCENE);
+        switchScene(SceneIdentifier.MAIN_MENU_SCENE);
     }
 
     /**
@@ -46,6 +56,8 @@ public class SceneManager {
         if (currentScene != null) {
             currentScene.destroy();
         }
+
+        gameManager.getInputManager().resetKeyStates();
 
         try {
             currentScene = newScene.getSceneClass().getConstructor().newInstance();
@@ -75,7 +87,10 @@ public class SceneManager {
      */
     @RequiredArgsConstructor
     public enum SceneIdentifier {
-        MAZE_SCENE(MazeScene.class);
+        MAIN_MENU_SCENE(MainMenuScene.class),
+        DUNGEON_SCENE(DungeonScene.class),
+        ESCAPED_SCENE(EscapedScene.class),
+        GAME_OVER_SCENE(GameOverScene.class);
 
         @Getter(AccessLevel.PRIVATE)
         private final Class<? extends Scene> sceneClass;

@@ -1,17 +1,20 @@
 package com.lukashornych.mathmare.scene;
 
 import com.lukashornych.mathmare.Camera;
+import com.lukashornych.mathmare.Expression;
 import com.lukashornych.mathmare.InputManager;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NonNull;
 import lombok.ToString;
+import lwjglutils.OGLTextRenderer;
 import org.joml.Math;
 import org.joml.Random;
 import org.joml.Vector3f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 
+import java.awt.*;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
@@ -24,13 +27,13 @@ import static org.lwjgl.opengl.GL30.glBindVertexArray;
 import static org.lwjgl.opengl.GL30.glGenVertexArrays;
 
 /**
- * Main scene of game, representing maze in which the player play.
+ * Main scene of game, representing dungeon (maze) in which the player play.
  *
  * @author Lukáš Hornych
  */
 @ToString
 @EqualsAndHashCode
-public class MazeScene implements Scene {
+public class DungeonScene implements Scene {
 
     private final Random rnd = new Random();
 
@@ -42,13 +45,14 @@ public class MazeScene implements Scene {
      */
 
     private final int MAZE_SIZE = 6;
+    private final int START_TIME = 120000;
 
     private final int[][] mazeRecipe = new int[][]{
             {0, 0, 0, 0, 0, 0},
             {0, 1, 1, 0, 0, 0},
             {0, 0, 1, 2, 1, 0},
             {0, 0, 1, 0, 2, 0},
-            {0, 0, 1, 1, 1, 0},
+            {0, 0, 1, 3, 1, 0},
             {0, 0, 0, 0, 0, 0}
     };
 
@@ -65,6 +69,15 @@ public class MazeScene implements Scene {
     private final List<Integer> dynamicObjectsDisplayLists = new ArrayList<>();
 
     private Camera camera;
+
+    private OGLTextRenderer uiTextRenderer;
+    private OGLTextRenderer expressionSolvingTextRenderer;
+
+    private int timeRemaining = START_TIME;
+
+    private boolean inSolvingExpressionMode = false;
+    private Expression solvingExpression = null;
+    private String enteredExpressionResult = "";
 
 
     @Override
@@ -108,26 +121,26 @@ public class MazeScene implements Scene {
                         glNewList(dlIndex, GL_COMPILE);
                             glBegin(GL_TRIANGLE_STRIP);
 
-                            glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                            glColor3f(0.5f, 0.5f, 0.5f);
                             glVertex3f(x * 5f, 0f, -y * 5f - 2.4f);
-                            glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                            glColor3f(0.5f, 0.5f, 0.5f);
                             glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2.4f);
-                            glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                            glColor3f(0.5f, 0.5f, 0.5f);
                             glVertex3f(x * 5f, 5f, -y * 5f - 2.4f);
-                            glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                            glColor3f(0.5f, 0.5f, 0.5f);
                             glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2.4f);
 
                             glEnd();
 
                             glBegin(GL_TRIANGLE_STRIP);
 
-                            glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                            glColor3f(0.5f, 0.5f, 0.5f);
                             glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2.6f);
-                            glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                            glColor3f(0.5f, 0.5f, 0.5f);
                             glVertex3f(x * 5f, 0f, -y * 5f - 2.6f);
-                            glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                            glColor3f(0.5f, 0.5f, 0.5f);
                             glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2.6f);
-                            glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                            glColor3f(0.5f, 0.5f, 0.5f);
                             glVertex3f(x * 5f, 5f, -y * 5f - 2.6f);
 
                             glEnd();
@@ -181,6 +194,89 @@ public class MazeScene implements Scene {
                     }
 
                     builtMaze[x][y] = new DoorTileDescriptor(dlIndex, boundingBox);
+                }
+
+                if (tile == 3) {
+                    final int dlIndex = glGenLists(1);
+                    BoundingBox boundingBox = null;
+
+                    if ((leftTile == 0) && (rightTile == 0)) {
+                        glNewList(dlIndex, GL_COMPILE);
+                        glBegin(GL_TRIANGLE_STRIP);
+
+                        glColor3f(0f, 1f, 0f);
+                        glVertex3f(x * 5f, 0f, -y * 5f - 2.4f);
+                        glColor3f(0f, 1f, 0f);
+                        glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2.4f);
+                        glColor3f(0f, 1f, 0f);
+                        glVertex3f(x * 5f, 5f, -y * 5f - 2.4f);
+                        glColor3f(0f, 1f, 0f);
+                        glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2.4f);
+
+                        glEnd();
+
+                        glBegin(GL_TRIANGLE_STRIP);
+
+                        glColor3f(0f, 1f, 0f);
+                        glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2.6f);
+                        glColor3f(0f, 1f, 0f);
+                        glVertex3f(x * 5f, 0f, -y * 5f - 2.6f);
+                        glColor3f(0f, 1f, 0f);
+                        glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2.6f);
+                        glColor3f(0f, 1f, 0f);
+                        glVertex3f(x * 5f, 5f, -y * 5f - 2.6f);
+
+                        glEnd();
+                        glEndList();
+                        dynamicObjectsDisplayLists.add(dlIndex);
+
+                        boundingBox = new BoundingBox(
+                                x * 5f,
+                                x * 5f + 5f,
+                                y * 5f + 2.4f,
+                                y * 5f + 2.6f
+                        );
+                        boundingBoxes.add(boundingBox);
+                    } else if ((topTile == 0) && (bottomTile == 0)) {
+                        glNewList(dlIndex, GL_COMPILE);
+                        glBegin(GL_TRIANGLE_STRIP);
+
+                        glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                        glVertex3f(x * 5f + 2.4f, 0f, -y * 5f - 5f);
+                        glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                        glVertex3f(x * 5f + 2.4f, 0f, -y * 5f);
+                        glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                        glVertex3f(x * 5f + 2.4f, 5f, -y * 5f - 5f);
+                        glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                        glVertex3f(x * 5f + 2.4f, 5f, -y * 5f);
+
+                        glEnd();
+
+                        glBegin(GL_TRIANGLE_STRIP);
+
+                        glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                        glVertex3f(x * 5f + 2.6f, 0f, -y * 5f);
+                        glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                        glVertex3f(x * 5f + 2.6f, 0f, -y * 5f - 5f);
+                        glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                        glVertex3f(x * 5f + 2.6f, 5f, -y * 5f);
+                        glColor3f(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat());
+                        glVertex3f(x * 5f + 2.6f, 5f, -y * 5f - 5f);
+
+                        glEnd();
+                        glEndList();
+                        dynamicObjectsDisplayLists.add(dlIndex);
+
+                        boundingBox = new BoundingBox(
+                                x * 5f + 2.4f,
+                                x * 5f + 2.6f,
+                                y * 5f,
+                                y * 5f + 5f
+                        );
+                        boundingBoxes.add(boundingBox);
+                    }
+
+                    builtMaze[x][y] = new ExitTileDescriptor();
                 }
 
                 if (tile == 1) {
@@ -351,53 +447,158 @@ public class MazeScene implements Scene {
                 (float) Math.PI / 2f,
                 (float) Math.PI / 2f
         );
+
+        final Font pixelDigivolveFont;
+        try {
+            pixelDigivolveFont = Font.createFont(Font.TRUETYPE_FONT, getClass().getResourceAsStream("/assets/font/pixel-digivolve.otf"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        uiTextRenderer = new OGLTextRenderer(
+                sceneManager.getGameManager().getWindow().getWidth(),
+                sceneManager.getGameManager().getWindow().getHeight(),
+                pixelDigivolveFont.deriveFont(Font.PLAIN, 20f)
+        );
+        expressionSolvingTextRenderer = new OGLTextRenderer(
+                sceneManager.getGameManager().getWindow().getWidth(),
+                sceneManager.getGameManager().getWindow().getHeight(),
+                pixelDigivolveFont.deriveFont(Font.PLAIN, 40f)
+        );
     }
 
     @Override
     public void update(float dt) {
-        camera.addAzimuth((float) (Math.PI * sceneManager.getGameManager().getInputManager().getDeltaMouseX()) / sceneManager.getGameManager().getWindow().getWidth());
-        camera.addZenith((float) (Math.PI * sceneManager.getGameManager().getInputManager().getDeltaMouseY()) / sceneManager.getGameManager().getWindow().getHeight());
+        timeRemaining -= dt * 1000f;
+        if (timeRemaining <= 0) {
+            sceneManager.switchScene(SceneManager.SceneIdentifier.GAME_OVER_SCENE);
+        }
 
-        if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_W)) {
-            final Vector3f direction = new Vector3f(Math.sin(camera.getAzimuth()), 0f, Math.cos(camera.getAzimuth()));
-            final Vector3f newPos = new Vector3f(camera.getPosition()).sub(direction.mul(8 * dt));
+        if (!inSolvingExpressionMode) {
+            camera.addAzimuth((float) (Math.PI * sceneManager.getGameManager().getInputManager().getDeltaMouseX()) / sceneManager.getGameManager().getWindow().getWidth());
+            camera.addZenith((float) (Math.PI * sceneManager.getGameManager().getInputManager().getDeltaMouseY()) / sceneManager.getGameManager().getWindow().getHeight());
+
+            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_W)) {
+                final Vector3f direction = new Vector3f(Math.sin(camera.getAzimuth()), 0f, Math.cos(camera.getAzimuth()));
+                final Vector3f newPos = new Vector3f(camera.getPosition()).sub(direction.mul(8 * dt));
 
                 if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
-                camera.setPosition(newPos);
-            }
+                    camera.setPosition(newPos);
+                }
 //            camera.moveForward(6 * dt);
-        }
-        if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_S)) {
-            final Vector3f direction = new Vector3f(Math.sin(camera.getAzimuth()), 0f, Math.cos(camera.getAzimuth()));
-            final Vector3f newPos = new Vector3f(camera.getPosition()).add(direction.mul(8 * dt));
-            if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
-                camera.setPosition(newPos);
             }
+            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_S)) {
+                final Vector3f direction = new Vector3f(Math.sin(camera.getAzimuth()), 0f, Math.cos(camera.getAzimuth()));
+                final Vector3f newPos = new Vector3f(camera.getPosition()).add(direction.mul(8 * dt));
+                if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
+                    camera.setPosition(newPos);
+                }
 //            camera.moveForward(-6 * dt);
-        }
-        if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_A)) {
-            final Vector3f direction = new Vector3f(Math.cos(camera.getAzimuth()), 0f, -Math.sin(camera.getAzimuth()));
-            final Vector3f newPos = new Vector3f(camera.getPosition()).sub(direction.mul(8 * dt));
-            if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
-                camera.setPosition(newPos);
             }
+            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_A)) {
+                final Vector3f direction = new Vector3f(Math.cos(camera.getAzimuth()), 0f, -Math.sin(camera.getAzimuth()));
+                final Vector3f newPos = new Vector3f(camera.getPosition()).sub(direction.mul(8 * dt));
+                if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
+                    camera.setPosition(newPos);
+                }
 //            camera.moveSideways(-6 * dt);
-        }
-        if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_D)) {
-            final Vector3f direction = new Vector3f(Math.cos(camera.getAzimuth()), 0f, -Math.sin(camera.getAzimuth()));
-            final Vector3f newPos = new Vector3f(camera.getPosition()).add(direction.mul(8 * dt));
-            if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
-                camera.setPosition(newPos);
             }
+            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_D)) {
+                final Vector3f direction = new Vector3f(Math.cos(camera.getAzimuth()), 0f, -Math.sin(camera.getAzimuth()));
+                final Vector3f newPos = new Vector3f(camera.getPosition()).add(direction.mul(8 * dt));
+                if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
+                    camera.setPosition(newPos);
+                }
 //            camera.moveSideways(6 * dt);
+            }
+
+            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_F)) {
+                final WorldTileDescriptor tileDescriptorOfPlayer = getWorldTileDescriptor(camera.getPosition());
+                if (tileDescriptorOfPlayer instanceof DoorTileDescriptor) {
+                    if (!inSolvingExpressionMode) {
+                        inSolvingExpressionMode = true;
+                        solvingExpression = Expression.generate();
+                        enteredExpressionResult = "";
+                    }
+                }
+                if (tileDescriptorOfPlayer instanceof ExitTileDescriptor) {
+                    sceneManager.getContext().put(EscapedScene.DUNGEON_ESCAPED_IN_PARAM, (START_TIME - timeRemaining) / 1000);
+                    sceneManager.switchScene(SceneManager.SceneIdentifier.ESCAPED_SCENE);
+                }
+            }
+        } else {
+            boolean keyPressed = false;
+            if (enteredExpressionResult.length() < 4) {
+                if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_0) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_0)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "0";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_1) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_1)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "1";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_2) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_2)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "2";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_3) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_3)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "3";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_4) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_4)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "4";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_5) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_5)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "5";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_6) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_6)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "6";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_7) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_7)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "7";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_8) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_8)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "8";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_9) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_9)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "9";
+                } else if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_MINUS)) {
+                    keyPressed = true;
+                    enteredExpressionResult += "9";
+                }
+            }
+
+            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_BACKSPACE) && enteredExpressionResult.length() > 0) {
+                keyPressed = true;
+                enteredExpressionResult = enteredExpressionResult.substring(0, enteredExpressionResult.length() - 1);
+            }
+
+            if ((sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_ENTER) || sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_KP_ENTER)) && enteredExpressionResult.length() > 0) {
+                keyPressed = true;
+                final int parsedEnteredResult = Integer.parseInt(enteredExpressionResult);
+                if (solvingExpression.isResultCorrect(parsedEnteredResult)) {
+                    final WorldTileDescriptor tileDescriptorOfPlayer = getWorldTileDescriptor(camera.getPosition());
+                    dynamicObjectsDisplayLists.remove((Object) ((DoorTileDescriptor) tileDescriptorOfPlayer).getDisplayList());
+                    boundingBoxes.remove(((DoorTileDescriptor) tileDescriptorOfPlayer).getBoundingBox());
+
+                    inSolvingExpressionMode = false;
+                    solvingExpression = null;
+                    timeRemaining += 5000;
+                } else {
+                    solvingExpression = Expression.generate();
+                }
+                enteredExpressionResult = "";
+            }
+
+            // keys debounce delay
+            if (keyPressed) {
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
         }
 
-        if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_F)) {
-            final WorldTileDescriptor tileDescriptorOfPlayer = getWorldTileDescriptor(camera.getPosition());
-            if (tileDescriptorOfPlayer instanceof DoorTileDescriptor) {
-                dynamicObjectsDisplayLists.remove((Object) ((DoorTileDescriptor) tileDescriptorOfPlayer).getDisplayList());
-                boundingBoxes.remove(((DoorTileDescriptor) tileDescriptorOfPlayer).getBoundingBox());
-            }
+        if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_ESCAPE)) {
+            sceneManager.switchScene(SceneManager.SceneIdentifier.GAME_OVER_SCENE);
         }
 
         glMatrixMode(GL_PROJECTION);
@@ -421,6 +622,36 @@ public class MazeScene implements Scene {
         glBindVertexArray(0);
 
         dynamicObjectsDisplayLists.forEach(GL11::glCallList);
+
+        if (inSolvingExpressionMode) {
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            glMatrixMode(GL_MODELVIEW);
+            glLoadIdentity();
+
+            glBegin(GL_TRIANGLE_STRIP);
+            glColor3f(0f, 0f, 0f);
+            glVertex3f(-0.6f, -0.5f, 0f);
+            glColor3f(0f, 0f, 0f);
+            glVertex3f(0.6f, -0.5f, 0f);
+            glColor3f(0f, 0f, 0f);
+            glVertex3f(-0.6f, 0.5f, 0f);
+            glColor3f(0f, 0f, 0f);
+            glVertex3f(0.6f, 0.5f, 0f);
+            glEnd();
+
+            expressionSolvingTextRenderer.setColor(Color.WHITE);
+            expressionSolvingTextRenderer.addStr2D(300, 250, "THE DOOR IS LOCKED");
+            expressionSolvingTextRenderer.addStr2D(340, 350, solvingExpression.toSolvableString());
+            expressionSolvingTextRenderer.addStr2D(570, 350, enteredExpressionResult);
+        }
+
+        if (timeRemaining < 15000) {
+            uiTextRenderer.setColor(Color.RED);
+        } else {
+            uiTextRenderer.setColor(Color.WHITE);
+        }
+        uiTextRenderer.addStr2D(0, 20, "Time remaining: " + ((int) (timeRemaining / 1000f)) + "s");
     }
 
     @Override
@@ -490,5 +721,9 @@ public class MazeScene implements Scene {
     private static class DoorTileDescriptor extends WorldTileDescriptor {
         private final int displayList;
         private final BoundingBox boundingBox;
+    }
+
+    @Data
+    private static class ExitTileDescriptor extends WorldTileDescriptor {
     }
 }

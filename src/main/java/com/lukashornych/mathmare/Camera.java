@@ -1,9 +1,6 @@
 package com.lukashornych.mathmare;
 
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NonNull;
-import lombok.ToString;
+import lombok.*;
 import org.joml.Math;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -21,8 +18,11 @@ public class Camera {
     protected final GameManager gameManager;
 
     @Getter
-    protected Vector3f position;
+    @Setter
+    protected Vector3f position; // todo
+    @Getter // todo
     protected float azimuth;
+    @Getter // todo
     protected float zenith;
 
     protected Matrix4f projection;
@@ -43,7 +43,7 @@ public class Camera {
         projection.identity();
 
         float aspectRatio = gameManager.getWindow().getWidth() / (float) gameManager.getWindow().getHeight();
-        projection.perspective(1f, aspectRatio, 1f, 100f);
+        projection.perspective(1f, aspectRatio, 0.1f, 100f);
 
         return projection;
     }

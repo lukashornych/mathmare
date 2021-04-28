@@ -29,7 +29,7 @@ public class Mathmare {
         window.destroy();
     }
 
-    // todo refactor?
+    // todo refactor? to gamemanager?
     private void loop() {
         long prevTime = System.currentTimeMillis();
         float deltaTime = -1.0f;

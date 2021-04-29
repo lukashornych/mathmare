@@ -4,8 +4,8 @@ import com.lukashornych.mathmare.physics.BoundingBox;
 import com.lukashornych.mathmare.physics.PhysicsWorld;
 import lombok.Data;
 import lombok.NonNull;
-import org.joml.Vector3f;
 import org.joml.Math;
+import org.joml.Vector3f;
 
 import static org.lwjgl.glfw.GLFW.*;
 

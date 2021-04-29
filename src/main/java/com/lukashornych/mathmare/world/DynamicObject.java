@@ -1,4 +1,4 @@
-package com.lukashornych.mathmare.scene.dungeon;
+package com.lukashornych.mathmare.world;
 
 import com.lukashornych.mathmare.physics.BoundingBox;
 import lombok.Data;

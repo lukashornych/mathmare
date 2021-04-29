@@ -1,4 +1,4 @@
-package com.lukashornych.mathmare.scene.dungeon;
+package com.lukashornych.mathmare.world;
 
 import lombok.Data;
 import org.joml.Vector2f;

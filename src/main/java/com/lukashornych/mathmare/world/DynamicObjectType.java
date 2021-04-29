@@ -1,4 +1,4 @@
-package com.lukashornych.mathmare.scene.dungeon;
+package com.lukashornych.mathmare.world;
 
 /**
  * Supported type of {@link DynamicObject}. Defines logical constraints and properties of the object.

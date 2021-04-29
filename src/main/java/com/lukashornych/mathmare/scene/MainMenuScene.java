@@ -1,5 +1,6 @@
 package com.lukashornych.mathmare.scene;
 
+import com.lukashornych.mathmare.InputManager;
 import lombok.Data;
 import lwjglutils.OGLTextRenderer;
 
@@ -41,6 +42,8 @@ public class MainMenuScene implements Scene {
                 sceneManager.getGameManager().getWindow().getHeight(),
                 pixelDigivolveFont.deriveFont(Font.PLAIN, 80f)
         );
+
+        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.FREE_MOVING);
     }
 
     @Override
@@ -62,11 +65,16 @@ public class MainMenuScene implements Scene {
         defaultTextRenderer.addStr2D(385, 370, "Press ENTER to try...");
 
         defaultTextRenderer.setColor(new Color(0x333333));
-        defaultTextRenderer.addStr2D(325, 520, "GAME BY LUKAS HORNYCH IN 2021");
+        defaultTextRenderer.addStr2D(20, 540, "Game by Lukas Hornych 2021");
+        defaultTextRenderer.addStr2D(20, 560, "Textures by Jestan");
+        defaultTextRenderer.addStr2D(890, 500, "Controls:");
+        defaultTextRenderer.addStr2D(620, 520, "Use \"F\" to interact with objects");
+        defaultTextRenderer.addStr2D(640, 540, "Use \"ENTER\" to confirm actions");
+        defaultTextRenderer.addStr2D(640, 560, "Use \"KEYPAD\" to enter numbers");
     }
 
     @Override
     public void destroy() {
-        // do nothing
+        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.INTERACTIVE);
     }
 }

@@ -155,7 +155,7 @@ public class MazeGenerator {
                 final boolean topRoom = maze[mazeX][mazeY - 1].equals(MazeTile.ROOM);
                 final boolean bottomRoom = maze[mazeX][mazeY + 1].equals(MazeTile.ROOM);
                 if ((leftRoom && rightRoom) || (topRoom && bottomRoom)) {
-                    final boolean connectionIsDoor = RANDOM.nextInt(10) > 3;
+                    final boolean connectionIsDoor = RANDOM.nextInt(10) > 2;
                     if (connectionIsDoor) {
                         maze[mazeX][mazeY] = MazeTile.DOOR;
                         continue;
@@ -164,33 +164,6 @@ public class MazeGenerator {
                     maze[mazeX][mazeY] = MazeTile.CORRIDOR;
                 }
             }
-        }
-    }
-
-    // todo remove
-    public static void main(String... args) {
-        final MazeDescriptor md = generateMaze();
-        System.out.println(md.getStartingPosition());
-        System.out.println(md.getRoomsCount());
-        final MazeTile[][] generatedMaze = md.getMaze();
-        for (int x = 0; x < MAZE_SIZE; x++) {
-            for (int y = 0; y < MAZE_SIZE; y++) {
-                final MazeTile mt = generatedMaze[x][y];
-                String c = " ";
-                if (mt == MazeTile.VOID) {
-                    c = ".";
-                } else if (mt == MazeTile.ROOM) {
-                    c = "X";
-                } else if (mt == MazeTile.CORRIDOR) {
-                    c = "O";
-                } else if (mt == MazeTile.DOOR) {
-                    c = "-";
-                } else if (mt == MazeTile.EXIT_PORTAL) {
-                    c = "$";
-                }
-                System.out.print(" " + c + " ");
-            }
-            System.out.println("");
         }
     }
 }

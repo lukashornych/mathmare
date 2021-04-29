@@ -1,5 +1,6 @@
 package com.lukashornych.mathmare.scene;
 
+import com.lukashornych.mathmare.InputManager;
 import lombok.Data;
 import lwjglutils.OGLTextRenderer;
 
@@ -44,6 +45,8 @@ public class EscapedScene implements Scene {
                 sceneManager.getGameManager().getWindow().getHeight(),
                 pixelDigivolveFont.deriveFont(Font.PLAIN, 60f)
         );
+
+        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.FREE_MOVING);
     }
 
     @Override
@@ -59,15 +62,13 @@ public class EscapedScene implements Scene {
         headlineTextRenderer.addStr2D(295, 230, "YOU ESCAPED!");
 
         defaultTextRenderer.setColor(Color.WHITE);
-
-        final int dungeonEscapedIn = (int) sceneManager.getContext().computeIfAbsent(DUNGEON_ESCAPED_IN_PARAM, (k) -> 0);
-        defaultTextRenderer.addStr2D(275, 300, "You did it! You escaped the dungeon in " + dungeonEscapedIn + "s.");
+        defaultTextRenderer.addStr2D(225, 300, "You did it! You successfully escaped the dungeon.");
 
         defaultTextRenderer.addStr2D(310, 520, "Press ENTER to try again better...");
     }
 
     @Override
     public void destroy() {
-        // do nothing
+        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.INTERACTIVE);
     }
 }

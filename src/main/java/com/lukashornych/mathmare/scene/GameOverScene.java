@@ -1,11 +1,13 @@
 package com.lukashornych.mathmare.scene;
 
+import com.lukashornych.mathmare.InputManager;
 import lombok.Data;
 import lwjglutils.OGLTextRenderer;
 
 import java.awt.*;
 
-import static org.lwjgl.glfw.GLFW.*;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE;
 
 /**
  * Game over scene telling player that he/she lost.
@@ -41,6 +43,8 @@ public class GameOverScene implements Scene {
                 sceneManager.getGameManager().getWindow().getHeight(),
                 pixelDigivolveFont.deriveFont(Font.PLAIN, 60f)
         );
+
+        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.FREE_MOVING);
     }
 
     @Override
@@ -63,6 +67,6 @@ public class GameOverScene implements Scene {
 
     @Override
     public void destroy() {
-        // do nothing
+        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.INTERACTIVE);
     }
 }

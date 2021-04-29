@@ -1,7 +1,5 @@
 package com.lukashornych.mathmare;
 
-import lwjglutils.OGLUtils;
-
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 

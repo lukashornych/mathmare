@@ -67,7 +67,7 @@ public class Expression {
 
     private static Operator generateOperator() {
         return Operator.PLUS;
-        // todo
+        // todo add minus support switch operands
 //        final Operator[] allOperators = Operator.values();
 //        return allOperators[RANDOM.nextInt(allOperators.length)];
     }

@@ -33,7 +33,7 @@ public class SceneManager {
     /**
      * Creates uninitialized manager. The {@link #init()} must be called before using
      *
-     * @param gameManager
+     * @param gameManager game manager instance
      */
     public SceneManager(@NonNull GameManager gameManager) {
         this.gameManager = gameManager;

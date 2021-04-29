@@ -27,8 +27,14 @@ public class Expression {
      * Generates new random expression
      */
     public static Expression generate() {
-        final int operandA = generateOperand();
-        final int operandB = generateOperand();
+        int operandA = generateOperand();
+        int operandB = generateOperand();
+        if (operandA < operandB) {
+            final int operandTemp = operandA;
+            operandA = operandB;
+            operandB = operandTemp;
+        }
+
         final Operator operator = generateOperator();
         final int expectedResult = calculateExpectedResult(operandA, operandB, operator);
 
@@ -66,10 +72,8 @@ public class Expression {
     }
 
     private static Operator generateOperator() {
-        return Operator.PLUS;
-        // todo add minus support switch operands
-//        final Operator[] allOperators = Operator.values();
-//        return allOperators[RANDOM.nextInt(allOperators.length)];
+        final Operator[] allOperators = Operator.values();
+        return allOperators[RANDOM.nextInt(allOperators.length)];
     }
 
     private static int calculateExpectedResult(int operandA, int operandB, Operator operator) {

@@ -61,7 +61,9 @@ public class Player {
         }
     }
 
-    // todo
+    /**
+     * @return current positions of player
+     */
     public Vector3f getPosition() {
         return camera.getPosition();
     }

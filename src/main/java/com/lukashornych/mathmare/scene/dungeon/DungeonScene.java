@@ -1,15 +1,19 @@
-package com.lukashornych.mathmare.scene;
+package com.lukashornych.mathmare.scene.dungeon;
 
-import com.lukashornych.mathmare.Camera;
 import com.lukashornych.mathmare.Expression;
 import com.lukashornych.mathmare.InputManager;
+import com.lukashornych.mathmare.Player;
 import com.lukashornych.mathmare.maze.MazeDescriptor;
 import com.lukashornych.mathmare.maze.MazeGenerator;
 import com.lukashornych.mathmare.maze.MazeTile;
+import com.lukashornych.mathmare.physics.BoundingBox;
+import com.lukashornych.mathmare.physics.PhysicsWorld;
+import com.lukashornych.mathmare.scene.Scene;
+import com.lukashornych.mathmare.scene.SceneManager;
+import com.lukashornych.mathmare.ui.TextRendererFactory;
 import lombok.*;
 import lwjglutils.OGLTextRenderer;
 import lwjglutils.OGLTexture2D;
-import org.joml.Math;
 import org.joml.Random;
 import org.joml.Vector2i;
 import org.joml.Vector3f;
@@ -38,8 +42,6 @@ import static org.lwjgl.opengl.GL30.glGenVertexArrays;
 @EqualsAndHashCode
 public class DungeonScene implements Scene {
 
-    private final Random rnd = new Random();
-
     private SceneManager sceneManager;
 
     private final int TIME_FOR_ROOM = 2000;
@@ -53,7 +55,7 @@ public class DungeonScene implements Scene {
     private final List<Vertex> floorVertexes = new ArrayList<>();
     private final List<Integer> floorVertexIndices = new ArrayList<>();
 
-    private final List<BoundingBox> boundingBoxes = new ArrayList<>();
+    private final PhysicsWorld physicsWorld = new PhysicsWorld();
 
     private int wallVaoId;
     private int wallIboId;
@@ -62,7 +64,7 @@ public class DungeonScene implements Scene {
 
     private final List<WorldTileDescriptor> dynamicTiles = new ArrayList<>();
 
-    private Camera camera;
+    private Player player;
 
     private OGLTextRenderer uiTextRenderer;
     private OGLTextRenderer expressionSolvingTextRenderer;
@@ -111,7 +113,7 @@ public class DungeonScene implements Scene {
 
                 // create only bounding box for wall tile
                 if (tile.equals(MazeTile.VOID)) {
-                    boundingBoxes.add(new BoundingBox(
+                    physicsWorld.getObjects().add(new BoundingBox(
                             x * 5f,
                             x * 5f + 5f,
                             y * 5f,
@@ -174,7 +176,7 @@ public class DungeonScene implements Scene {
                                 y * 5f + 2.4f,
                                 y * 5f + 2.6f
                         );
-                        boundingBoxes.add(boundingBox);
+                        physicsWorld.getObjects().add(boundingBox);
                     } else if ((topTile.equals(MazeTile.VOID)) && (bottomTile.equals(MazeTile.VOID))) {
                         glNewList(dlIndex, GL_COMPILE);
                             glBegin(GL_TRIANGLE_STRIP);
@@ -218,7 +220,7 @@ public class DungeonScene implements Scene {
                                 y * 5f,
                                 y * 5f + 5f
                         );
-                        boundingBoxes.add(boundingBox);
+                        physicsWorld.getObjects().add(boundingBox);
                     }
 
                     final DoorTileDescriptor tileDescriptor = new DoorTileDescriptor(dlIndex, boundingBox, doorTexture);
@@ -304,7 +306,7 @@ public class DungeonScene implements Scene {
                             y * 5f + 2f,
                             y * 5f + 3f
                     );
-                    boundingBoxes.add(boundingBox);
+                    physicsWorld.getObjects().add(boundingBox);
 
                     final ExitTileDescriptor exitTileDescriptor = new ExitTileDescriptor(dlIndex, boundingBox, exitPortalTexture);
                     dynamicTiles.add(exitTileDescriptor);
@@ -535,34 +537,18 @@ public class DungeonScene implements Scene {
         sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.FREE_MOVING);
 
         final Vector2i playerStartingPosition = mazeDescriptor.getStartingPosition();
-        camera = new Camera(
+        player = new Player(
                 sceneManager.getGameManager(),
+                physicsWorld,
                 new Vector3f(
                         playerStartingPosition.x * 5f + 2.5f,
                         2.5f,
                         -playerStartingPosition.y * 5f - 2.5f
-                ),
-                0f,
-                0f
+                )
         );
 
-        final Font pixelDigivolveFont;
-        try {
-            pixelDigivolveFont = Font.createFont(Font.TRUETYPE_FONT, getClass().getResourceAsStream("/assets/font/pixel-digivolve.otf"));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        uiTextRenderer = new OGLTextRenderer(
-                sceneManager.getGameManager().getWindow().getWidth(),
-                sceneManager.getGameManager().getWindow().getHeight(),
-                pixelDigivolveFont.deriveFont(Font.PLAIN, 20f)
-        );
-        expressionSolvingTextRenderer = new OGLTextRenderer(
-                sceneManager.getGameManager().getWindow().getWidth(),
-                sceneManager.getGameManager().getWindow().getHeight(),
-                pixelDigivolveFont.deriveFont(Font.PLAIN, 40f)
-        );
+        uiTextRenderer = TextRendererFactory.createTextRenderer(sceneManager.getGameManager().getWindow(), 20f);
+        expressionSolvingTextRenderer = TextRendererFactory.createTextRenderer(sceneManager.getGameManager().getWindow(), 40f);
     }
 
     @Override
@@ -573,7 +559,7 @@ public class DungeonScene implements Scene {
                 inInstructionsMode = false;
             }
         } else {
-//            timeRemaining -= dt * 1000f;
+            timeRemaining -= dt * 1000f;
             if (timeRemaining <= 0) {
                 sceneManager.switchScene(SceneManager.SceneIdentifier.GAME_OVER_SCENE);
             }
@@ -581,41 +567,10 @@ public class DungeonScene implements Scene {
 
 
         if (!inSolvingExpressionMode && !inInstructionsMode) {
-            camera.addAzimuth((float) (Math.PI * sceneManager.getGameManager().getInputManager().getDeltaMouseX()) / sceneManager.getGameManager().getWindow().getWidth());
-            camera.addZenith((float) (Math.PI * sceneManager.getGameManager().getInputManager().getDeltaMouseY()) / sceneManager.getGameManager().getWindow().getHeight());
-
-            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_W)) {
-                final Vector3f direction = new Vector3f(Math.sin(camera.getAzimuth()), 0f, Math.cos(camera.getAzimuth()));
-                final Vector3f newPos = new Vector3f(camera.getPosition()).sub(direction.mul(10 * dt));
-
-                if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
-                    camera.setPosition(newPos);
-                }
-            }
-            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_S)) {
-                final Vector3f direction = new Vector3f(Math.sin(camera.getAzimuth()), 0f, Math.cos(camera.getAzimuth()));
-                final Vector3f newPos = new Vector3f(camera.getPosition()).add(direction.mul(10 * dt));
-                if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
-                    camera.setPosition(newPos);
-                }
-            }
-            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_A)) {
-                final Vector3f direction = new Vector3f(Math.cos(camera.getAzimuth()), 0f, -Math.sin(camera.getAzimuth()));
-                final Vector3f newPos = new Vector3f(camera.getPosition()).sub(direction.mul(10 * dt));
-                if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
-                    camera.setPosition(newPos);
-                }
-            }
-            if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_D)) {
-                final Vector3f direction = new Vector3f(Math.cos(camera.getAzimuth()), 0f, -Math.sin(camera.getAzimuth()));
-                final Vector3f newPos = new Vector3f(camera.getPosition()).add(direction.mul(10 * dt));
-                if (!isCollidingWithWorld(createPlayerBoundingBox(newPos))) {
-                    camera.setPosition(newPos);
-                }
-            }
+            player.updatePosition(dt);
 
             if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_F)) {
-                final WorldTileDescriptor tileDescriptorOfPlayer = getWorldTileDescriptor(camera.getPosition());
+                final WorldTileDescriptor tileDescriptorOfPlayer = getWorldTileDescriptor(player.getPosition());
                 if (tileDescriptorOfPlayer instanceof DoorTileDescriptor) {
                     if (!inSolvingExpressionMode) {
                         inSolvingExpressionMode = true;
@@ -677,9 +632,9 @@ public class DungeonScene implements Scene {
                 keyPressed = true;
                 final int parsedEnteredResult = Integer.parseInt(enteredExpressionResult);
                 if (solvingExpression.isResultCorrect(parsedEnteredResult)) {
-                    final WorldTileDescriptor tileDescriptorOfPlayer = getWorldTileDescriptor(camera.getPosition());
+                    final WorldTileDescriptor tileDescriptorOfPlayer = getWorldTileDescriptor(player.getPosition());
                     dynamicTiles.remove(tileDescriptorOfPlayer);
-                    boundingBoxes.remove(((DoorTileDescriptor) tileDescriptorOfPlayer).getBoundingBox());
+                    physicsWorld.getObjects().remove(((DoorTileDescriptor) tileDescriptorOfPlayer).getBoundingBox());
 
                     inSolvingExpressionMode = false;
                     solvingExpression = null;
@@ -701,18 +656,43 @@ public class DungeonScene implements Scene {
             sceneManager.switchScene(SceneManager.SceneIdentifier.GAME_OVER_SCENE);
         }
 
+        renderWorld();
+
+        renderUi();
+    }
+
+    @Override
+    public void destroy() {
+        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.INTERACTIVE);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+    }
+
+
+    private WorldTileDescriptor getWorldTileDescriptor(Vector3f position) {
+        final int positionXInMaze = (int) (position.x / 5);
+        final int positionYInMaze = (int) (-position.z / 5);
+
+        return builtMaze[positionXInMaze][positionYInMaze];
+    }
+
+    /**
+     * Renders whole game world (dungeon)
+     */
+    private void renderWorld() {
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         final FloatBuffer projectionBuffer = BufferUtils.createFloatBuffer(16);
-        camera.getProjection().get(projectionBuffer);
+        player.getCamera().getProjection().get(projectionBuffer);
         glMultMatrixf(projectionBuffer);
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         final FloatBuffer viewBuffer = BufferUtils.createFloatBuffer(16);
-        camera.getView().get(viewBuffer);
+        player.getCamera().getView().get(viewBuffer);
         glMultMatrixf(viewBuffer);
 
+        // render static walls
         glBindVertexArray(wallVaoId);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wallIboId);
 
@@ -724,6 +704,7 @@ public class DungeonScene implements Scene {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
+        // render static floors
         glBindVertexArray(floorVaoId);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, floorIboId);
 
@@ -735,6 +716,7 @@ public class DungeonScene implements Scene {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
+        // render dynamic objects
         // todo: separate dynamic objects??
         dynamicTiles.forEach(tile -> {
             if (!(tile instanceof DoorTileDescriptor)) {
@@ -746,95 +728,90 @@ public class DungeonScene implements Scene {
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             glCallList(((DoorTileDescriptor) tile).getDisplayList());
         });
+    }
 
-        if (inSolvingExpressionMode) {
-            glMatrixMode(GL_PROJECTION);
-            glLoadIdentity();
-            glMatrixMode(GL_MODELVIEW);
-            glLoadIdentity();
-
-            glBegin(GL_TRIANGLE_STRIP);
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(-0.6f, -0.5f, 0f);
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(0.6f, -0.5f, 0f);
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(-0.6f, 0.5f, 0f);
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(0.6f, 0.5f, 0f);
-            glEnd();
-
-            expressionSolvingTextRenderer.setColor(Color.WHITE);
-            expressionSolvingTextRenderer.addStr2D(300, 250, "THE DOOR IS LOCKED");
-            expressionSolvingTextRenderer.addStr2D(340, 350, solvingExpression.toSolvableString());
-            expressionSolvingTextRenderer.addStr2D(570, 350, enteredExpressionResult);
+    /**
+     * Renders whole UI base on current game state
+     */
+    private void renderUi() {
+        if (!inInstructionsMode) {
+            renderInfoUi();
         }
         if (inInstructionsMode) {
-            glMatrixMode(GL_PROJECTION);
-            glLoadIdentity();
-            glMatrixMode(GL_MODELVIEW);
-            glLoadIdentity();
+            renderInstructionsUi();
+        }
+        if (inSolvingExpressionMode) {
+            renderExpressionSolvingUi();
+        }
+    }
 
-            glBegin(GL_TRIANGLE_STRIP);
+    /**
+     * Renders UI with basic info for player
+     */
+    private void renderInfoUi() {
+        if (timeRemaining < 15000) {
+            uiTextRenderer.setColor(Color.RED);
+        } else {
+            uiTextRenderer.setColor(Color.WHITE);
+        }
+        uiTextRenderer.addStr2D(0, 20, "Time remaining: " + ((int) (timeRemaining / 1000f)) + "s");
+    }
+
+    /**
+     * Renders UI for currently solving expression
+     */
+    private void renderExpressionSolvingUi() {
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        glBegin(GL_TRIANGLE_STRIP);
+            glColor3f(0f, 0f, 0f);
+            glVertex3f(-0.6f, -0.5f, 0f);
+
+            glColor3f(0f, 0f, 0f);
+            glVertex3f(0.6f, -0.5f, 0f);
+
+            glColor3f(0f, 0f, 0f);
+            glVertex3f(-0.6f, 0.5f, 0f);
+
+            glColor3f(0f, 0f, 0f);
+            glVertex3f(0.6f, 0.5f, 0f);
+        glEnd();
+
+        expressionSolvingTextRenderer.setColor(Color.WHITE);
+        expressionSolvingTextRenderer.addStr2D(300, 250, "THE DOOR IS LOCKED");
+        expressionSolvingTextRenderer.addStr2D(340, 350, solvingExpression.toSolvableString());
+        expressionSolvingTextRenderer.addStr2D(570, 350, enteredExpressionResult);
+    }
+
+    /**
+     * Renders UI for instructions
+     */
+    private void renderInstructionsUi() {
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        glBegin(GL_TRIANGLE_STRIP);
             glColor3f(0f, 0f, 0f);
             glVertex3f(-0.7f, -0.4f, 0f);
+
             glColor3f(0f, 0f, 0f);
             glVertex3f(0.7f, -0.4f, 0f);
+
             glColor3f(0f, 0f, 0f);
             glVertex3f(-0.7f, 0.4f, 0f);
+
             glColor3f(0f, 0f, 0f);
             glVertex3f(0.7f, 0.4f, 0f);
-            glEnd();
+        glEnd();
 
-            expressionSolvingTextRenderer.setColor(Color.WHITE);
-            expressionSolvingTextRenderer.addStr2D(290, 275, "Find an exit portal");
-            expressionSolvingTextRenderer.addStr2D(230, 335, "to escape this dungeon!");
-        }
-
-        if (!inInstructionsMode) {
-            if (timeRemaining < 15000) {
-                uiTextRenderer.setColor(Color.RED);
-            } else {
-                uiTextRenderer.setColor(Color.WHITE);
-            }
-            uiTextRenderer.addStr2D(0, 20, "Time remaining: " + ((int) (timeRemaining / 1000f)) + "s");
-        }
-    }
-
-    @Override
-    public void destroy() {
-        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.INTERACTIVE);
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_CULL_FACE);
-    }
-
-    private BoundingBox createPlayerBoundingBox(Vector3f pos) {
-        return new BoundingBox(
-                pos.x - 0.5f,
-                pos.x + 0.5f,
-                -pos.z - 0.5f,
-                -pos.z + 0.5f
-        );
-    }
-
-    private boolean isCollidingWithWorld(BoundingBox boundingBox) {
-        for (BoundingBox worldBoundingBox : boundingBoxes) {
-            final boolean colliding = (worldBoundingBox.getMinX() <= boundingBox.getMaxX() && worldBoundingBox.getMaxX() >= boundingBox.getMinX()) &&
-                                      (worldBoundingBox.getMinY() <= boundingBox.getMaxY() && worldBoundingBox.getMaxY() >= boundingBox.getMinY()) &&
-                                      worldBoundingBox.isEnabled();
-            if (colliding) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private WorldTileDescriptor getWorldTileDescriptor(Vector3f position) {
-        final int positionXInMaze = (int) (position.x / 5);
-        final int positionYInMaze = (int) (-position.z / 5);
-
-        return builtMaze[positionXInMaze][positionYInMaze];
+        expressionSolvingTextRenderer.setColor(Color.WHITE);
+        expressionSolvingTextRenderer.addStr2D(290, 275, "Find an exit portal");
+        expressionSolvingTextRenderer.addStr2D(230, 335, "to escape this dungeon!");
     }
 
     @Data
@@ -847,15 +824,6 @@ public class DungeonScene implements Scene {
         private final float r = 1f;
         private final float g = 1f;
         private final float b = 1f;
-    }
-
-    @Data
-    private static class BoundingBox {
-        private final float minX;
-        private final float maxX;
-        private final float minY;
-        private final float maxY;
-        private final boolean enabled = true;
     }
 
     @Data

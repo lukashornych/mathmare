@@ -1,6 +1,7 @@
 package com.lukashornych.mathmare.scene;
 
 import com.lukashornych.mathmare.GameManager;
+import com.lukashornych.mathmare.scene.dungeon.DungeonScene;
 import lombok.*;
 
 import java.util.HashMap;

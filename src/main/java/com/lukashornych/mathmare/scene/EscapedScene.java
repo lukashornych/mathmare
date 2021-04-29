@@ -1,6 +1,7 @@
 package com.lukashornych.mathmare.scene;
 
 import com.lukashornych.mathmare.InputManager;
+import com.lukashornych.mathmare.ui.TextRendererFactory;
 import lombok.Data;
 import lwjglutils.OGLTextRenderer;
 
@@ -21,30 +22,13 @@ public class EscapedScene implements Scene {
 
     private SceneManager sceneManager;
 
-    // todo text renderer factory
     private OGLTextRenderer defaultTextRenderer;
     private OGLTextRenderer headlineTextRenderer;
 
     @Override
     public void init() {
-        // todo separate to common text renderer factory
-        final Font pixelDigivolveFont;
-        try {
-            pixelDigivolveFont = Font.createFont(Font.TRUETYPE_FONT, getClass().getResourceAsStream("/assets/font/pixel-digivolve.otf"));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        defaultTextRenderer = new OGLTextRenderer(
-                sceneManager.getGameManager().getWindow().getWidth(),
-                sceneManager.getGameManager().getWindow().getHeight(),
-                pixelDigivolveFont.deriveFont(Font.PLAIN, 20f)
-        );
-        headlineTextRenderer = new OGLTextRenderer(
-                sceneManager.getGameManager().getWindow().getWidth(),
-                sceneManager.getGameManager().getWindow().getHeight(),
-                pixelDigivolveFont.deriveFont(Font.PLAIN, 60f)
-        );
+        defaultTextRenderer = TextRendererFactory.createTextRenderer(sceneManager.getGameManager().getWindow(), 20f);
+        headlineTextRenderer = TextRendererFactory.createTextRenderer(sceneManager.getGameManager().getWindow(), 60f);
 
         sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.FREE_MOVING);
     }

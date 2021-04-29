@@ -17,13 +17,9 @@ public class Camera {
 
     protected final GameManager gameManager;
 
-    @Getter
-    @Setter
-    protected Vector3f position; // todo
-    @Getter // todo
-    protected float azimuth;
-    @Getter // todo
-    protected float zenith;
+    @Getter @Setter protected Vector3f position;
+    @Getter protected float azimuth;
+    @Getter protected float zenith;
 
     protected Matrix4f projection;
     protected Matrix4f view;
@@ -39,6 +35,11 @@ public class Camera {
         this.view = new Matrix4f();
     }
 
+    /**
+     * Builds projection matrix from current camera state
+     *
+     * @return projection matrix
+     */
     public Matrix4f getProjection() {
         projection.identity();
 
@@ -48,6 +49,11 @@ public class Camera {
         return projection;
     }
 
+    /**
+     * Builds view matrix from current camera state
+     *
+     * @return view matrix
+     */
     public Matrix4f getView() {
         final Vector3f xAxis = new Vector3f(
                 Math.cos(azimuth),
@@ -79,7 +85,7 @@ public class Camera {
     /**
      * Increases current azimuth by the step
      *
-     * @param step
+     * @param step how much azimuth to add
      */
     public void addAzimuth(float step) {
         azimuth += step;
@@ -89,30 +95,10 @@ public class Camera {
     /**
      * Increases current zenith by the step
      *
-     * @param step
+     * @param step how much zenith to add
      */
     public void addZenith(float step) {
         zenith += step;
         zenith = Math.clamp((float) (-Math.PI / 2f), (float) (Math.PI / 2f), zenith);
-    }
-
-    /**
-     * Moves camera position in looking direction but keeps Y coordinates.
-     *
-     * @param length
-     */
-    public void moveForward(float length) {
-        final Vector3f direction = new Vector3f(Math.sin(azimuth), 0f, Math.cos(azimuth));
-        position.sub(direction.mul(length));
-    }
-
-    /**
-     * Moves camera position in perpendicular direction to looking direction.
-     *
-     * @param length
-     */
-    public void moveSideways(float length) {
-        final Vector3f direction = new Vector3f(Math.cos(azimuth), 0f, -Math.sin(azimuth));
-        position.add(direction.mul(length));
     }
 }

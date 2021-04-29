@@ -6,7 +6,7 @@
 
     <groupId>com.lukashornych</groupId>
     <artifactId>mathmare</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
     <packaging>jar</packaging>
     <description>Simple 3D OpenGL game</description>
 

@@ -20,3 +20,7 @@ The game was built in Java using [LWJGL](https://www.lwjgl.org/) library with he
 ## Graphics
 
 Textures are by artist [Jestan](https://jestan.itch.io/pixel-texture-pack).
+
+## Build
+
+Project uses Maven, so to build executable jar file simply run `mvn clean install`. 

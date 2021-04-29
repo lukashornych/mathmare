@@ -11,10 +11,12 @@ import com.lukashornych.mathmare.physics.PhysicsWorld;
 import com.lukashornych.mathmare.scene.Scene;
 import com.lukashornych.mathmare.scene.SceneManager;
 import com.lukashornych.mathmare.ui.TextRendererFactory;
-import lombok.*;
+import lombok.EqualsAndHashCode;
+import lombok.NonNull;
+import lombok.ToString;
 import lwjglutils.OGLTextRenderer;
 import lwjglutils.OGLTexture2D;
-import org.joml.Random;
+import org.joml.Vector2f;
 import org.joml.Vector2i;
 import org.joml.Vector3f;
 import org.lwjgl.BufferUtils;
@@ -44,25 +46,24 @@ public class DungeonScene implements Scene {
 
     private SceneManager sceneManager;
 
+    private final float TILE_WORLD_SIZE = 5f;
+
     private final int TIME_FOR_ROOM = 2000;
     private final int EXPRESSION_SOLVED_TIME_BONUS = 5000;
     private final int EXPRESSION_WRONG_TIME_HARM = 1000;
 
-    private final WorldTileDescriptor[][] builtMaze = new WorldTileDescriptor[MAZE_SIZE][MAZE_SIZE];
-
-    private final List<Vertex> wallVertexes = new ArrayList<>();
-    private final List<Integer> wallVertexIndices = new ArrayList<>();
-    private final List<Vertex> floorVertexes = new ArrayList<>();
-    private final List<Integer> floorVertexIndices = new ArrayList<>();
-
-    private final PhysicsWorld physicsWorld = new PhysicsWorld();
+    private final List<DynamicObject> allDynamicObjects = new ArrayList<>();
+    private final DynamicObject[][] dynamicObjectsInWorld = new DynamicObject[MAZE_SIZE][MAZE_SIZE];
 
     private int wallVaoId;
     private int wallIboId;
+    private int wallIndicesCount;
+
     private int floorVaoId;
     private int floorIboId;
+    private int floorIndicesCount;
 
-    private final List<WorldTileDescriptor> dynamicTiles = new ArrayList<>();
+    private final PhysicsWorld physicsWorld = new PhysicsWorld();
 
     private Player player;
 
@@ -91,464 +92,20 @@ public class DungeonScene implements Scene {
 
     @Override
     public void init() {
-        try {
-            wallTexture = new OGLTexture2D("assets/texture/bricks.png");
-            floorTexture = new OGLTexture2D("assets/texture/pavement.png");
-            doorTexture = new OGLTexture2D("assets/texture/locked-doors.png");
-            exitPortalTexture = new OGLTexture2D("assets/texture/portal.png");
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
         final MazeDescriptor mazeDescriptor = MazeGenerator.generateMaze();
         final MazeTile[][] mazeRecipe = mazeDescriptor.getMaze();
 
         timeRemaining = mazeDescriptor.getRoomsCount() * TIME_FOR_ROOM;
 
-        int wallQuadCounter = 0;
-        int floorQuadCounter = 0;
-        for (int x = 0; x < MAZE_SIZE; x++) {
-            for (int y = 0; y < MAZE_SIZE; y++) {
-                final MazeTile tile = mazeRecipe[x][y];
+        loadTextures();
 
-                // create only bounding box for wall tile
-                if (tile.equals(MazeTile.VOID)) {
-                    physicsWorld.getObjects().add(new BoundingBox(
-                            x * 5f,
-                            x * 5f + 5f,
-                            y * 5f,
-                            y * 5f + 5f
-                    ));
-                    continue;
-                }
+        buildWorld(mazeRecipe);
 
-                final MazeTile leftTile = mazeRecipe[x - 1][y];
-                final MazeTile rightTile = mazeRecipe[x + 1][y];
-                final MazeTile topTile = mazeRecipe[x][y - 1];
-                final MazeTile bottomTile = mazeRecipe[x][y + 1];
+        setupCommonRenderOptions();
 
-                // create door
-                // todo
-                if (tile.equals(MazeTile.DOOR)) {
-                    final int dlIndex = glGenLists(1);
-                    BoundingBox boundingBox = null;
+        createPlayer(mazeDescriptor);
 
-                    if ((leftTile.equals(MazeTile.VOID)) && (rightTile.equals(MazeTile.VOID))) {
-                        glNewList(dlIndex, GL_COMPILE);
-                            glBegin(GL_TRIANGLE_STRIP);
-
-                            glTexCoord2f(0f, 1f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f, 0f, -y * 5f - 2.4f);
-                            glTexCoord2f(1f, 1f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2.4f);
-                            glTexCoord2f(0f, 0f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f, 5f, -y * 5f - 2.4f);
-                            glTexCoord2f(1f, 0f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2.4f);
-
-                            glEnd();
-
-                            glBegin(GL_TRIANGLE_STRIP);
-
-                            glTexCoord2f(1f, 1f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2.6f);
-                            glTexCoord2f(0f, 1f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f, 0f, -y * 5f - 2.6f);
-                            glTexCoord2f(1f, 0f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2.6f);
-                            glTexCoord2f(0f, 0f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f, 5f, -y * 5f - 2.6f);
-
-                            glEnd();
-                        glEndList();
-
-                        boundingBox = new BoundingBox(
-                                x * 5f,
-                                x * 5f + 5f,
-                                y * 5f + 2.4f,
-                                y * 5f + 2.6f
-                        );
-                        physicsWorld.getObjects().add(boundingBox);
-                    } else if ((topTile.equals(MazeTile.VOID)) && (bottomTile.equals(MazeTile.VOID))) {
-                        glNewList(dlIndex, GL_COMPILE);
-                            glBegin(GL_TRIANGLE_STRIP);
-
-                            glTexCoord2f(0f, 1f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 2.4f, 0f, -y * 5f - 5f);
-                            glTexCoord2f(1f, 1f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 2.4f, 0f, -y * 5f);
-                            glTexCoord2f(0f, 0f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 2.4f, 5f, -y * 5f - 5f);
-                            glTexCoord2f(1f, 0f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 2.4f, 5f, -y * 5f);
-
-                            glEnd();
-
-                            glBegin(GL_TRIANGLE_STRIP);
-
-                            glTexCoord2f(1f, 1f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 2.6f, 0f, -y * 5f);
-                            glTexCoord2f(0f, 1f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 2.6f, 0f, -y * 5f - 5f);
-                            glTexCoord2f(1f, 0f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 2.6f, 5f, -y * 5f);
-                            glTexCoord2f(0f, 0f);
-                            glColor3f(1f, 1f, 1f);
-                            glVertex3f(x * 5f + 2.6f, 5f, -y * 5f - 5f);
-
-                            glEnd();
-                        glEndList();
-
-                        boundingBox = new BoundingBox(
-                                x * 5f + 2.4f,
-                                x * 5f + 2.6f,
-                                y * 5f,
-                                y * 5f + 5f
-                        );
-                        physicsWorld.getObjects().add(boundingBox);
-                    }
-
-                    final DoorTileDescriptor tileDescriptor = new DoorTileDescriptor(dlIndex, boundingBox, doorTexture);
-                    dynamicTiles.add(tileDescriptor);
-                    builtMaze[x][y] = tileDescriptor;
-                }
-
-                // todo
-                if (tile.equals(MazeTile.EXIT_PORTAL)) {
-                    final int dlIndex = glGenLists(1);
-
-                    glNewList(dlIndex, GL_COMPILE);
-
-                    // front
-                    glBegin(GL_TRIANGLE_STRIP);
-                        glTexCoord2f(0f, 1f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f, 0f, -y * 5f - 2f);
-                        glTexCoord2f(0.84f, 1f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2f);
-                        glTexCoord2f(0f, 0f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f, 5f, -y * 5f - 2f);
-                        glTexCoord2f(0.84f, 0f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2f);
-                    glEnd();
-
-                    // back
-                    glBegin(GL_TRIANGLE_STRIP);
-                        glTexCoord2f(0.84f, 1f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f + 5f, 0f, -y * 5f - 3f);
-                        glTexCoord2f(0f, 1f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f, 0f, -y * 5f - 3f);
-                        glTexCoord2f(0.84f, 0f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f + 5f, 5f, -y * 5f - 3f);
-                        glTexCoord2f(0f, 0f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f, 5f, -y * 5f - 3f);
-                    glEnd();
-
-                    // left side
-                    glBegin(GL_TRIANGLE_STRIP);
-                        glTexCoord2f(0.84f, 1f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f, 0f, -y * 5f - 3f);
-                        glTexCoord2f(1f, 1f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f, 0f, -y * 5f - 2f);
-                        glTexCoord2f(0.84f, 0f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f, 5f, -y * 5f - 3f);
-                        glTexCoord2f(1f, 0f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f, 5f, -y * 5f - 2f);
-                    glEnd();
-
-                    // right side
-                    glBegin(GL_TRIANGLE_STRIP);
-                        glTexCoord2f(0.84f, 1f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2f);
-                        glTexCoord2f(1f, 1f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f + 5f, 0f, -y * 5f - 3f);
-                        glTexCoord2f(0.84f, 0f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2f);
-                        glTexCoord2f(1f, 0f);
-                        glColor3f(1f, 1f, 1f);
-                        glVertex3f(x * 5f + 5, 5f, -y * 5f - 3f);
-                    glEnd();
-
-                    glEndList();
-
-                    final BoundingBox boundingBox = new BoundingBox(
-                            x * 5f,
-                            x * 5f + 5f,
-                            y * 5f + 2f,
-                            y * 5f + 3f
-                    );
-                    physicsWorld.getObjects().add(boundingBox);
-
-                    final ExitTileDescriptor exitTileDescriptor = new ExitTileDescriptor(dlIndex, boundingBox, exitPortalTexture);
-                    dynamicTiles.add(exitTileDescriptor);
-                    builtMaze[x][y] = exitTileDescriptor;
-                }
-
-                if (tile.equals(MazeTile.ROOM)) {
-                    builtMaze[x][y] = new FloorTileDescriptor(floorTexture);
-                }
-
-                // floor
-                floorVertexes.add(new Vertex(x * 5f, 0f, -y * 5f, 0f, 1f));
-                floorVertexes.add(new Vertex(x * 5f + 5f, 0f, -y * 5f - 5f, 1f, 0f));
-                floorVertexes.add(new Vertex(x * 5f, 0f, -y * 5f - 5f, 0f, 0f));
-                floorVertexes.add(new Vertex(x * 5f + 5f, 0f, -y * 5f, 1f, 1f));
-
-                floorVertexIndices.add(floorQuadCounter * 4);
-                floorVertexIndices.add(floorQuadCounter * 4 + 1);
-                floorVertexIndices.add(floorQuadCounter * 4 + 2);
-
-                floorVertexIndices.add(floorQuadCounter * 4);
-                floorVertexIndices.add(floorQuadCounter * 4 + 3);
-                floorVertexIndices.add(floorQuadCounter * 4 + 1);
-
-                floorQuadCounter++;
-
-                // ceiling
-                wallVertexes.add(new Vertex(x * 5f, 5f, -y * 5f - 5f, 0f, 1f));
-                wallVertexes.add(new Vertex(x * 5f + 5f, 5f, -y * 5f, 1f, 0f));
-                wallVertexes.add(new Vertex(x * 5f, 5f, -y * 5f, 0f, 0f));
-                wallVertexes.add(new Vertex(x * 5f + 5f, 5f, -y * 5f - 5f, 1f, 1f));
-
-                wallVertexIndices.add(wallQuadCounter * 4);
-                wallVertexIndices.add(wallQuadCounter * 4 + 1);
-                wallVertexIndices.add(wallQuadCounter * 4 + 2);
-
-                wallVertexIndices.add(wallQuadCounter * 4);
-                wallVertexIndices.add(wallQuadCounter * 4 + 3);
-                wallVertexIndices.add(wallQuadCounter * 4 + 1);
-
-                wallQuadCounter++;
-
-                if (leftTile.equals(MazeTile.VOID)) {
-                    wallVertexes.add(new Vertex(x * 5f, 0f, -y * 5f, 0f, 1f));
-                    wallVertexes.add(new Vertex(x * 5f, 5f, -y * 5f - 5f, 1f, 0f));
-                    wallVertexes.add(new Vertex(x * 5f, 5f, -y * 5f, 0f, 0f));
-                    wallVertexes.add(new Vertex(x * 5f, 0f, -y * 5f - 5f, 1f, 1f));
-
-                    wallVertexIndices.add(wallQuadCounter * 4);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 1);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 2);
-
-                    wallVertexIndices.add(wallQuadCounter * 4);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 3);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 1);
-
-                    wallQuadCounter++;
-                }
-
-                if (rightTile.equals(MazeTile.VOID)) {
-                    wallVertexes.add(new Vertex(x * 5f + 5f, 0f, -y * 5f - 5f, 0f, 1f));
-                    wallVertexes.add(new Vertex(x * 5f + 5f, 5f, -y * 5f, 1f, 0f));
-                    wallVertexes.add(new Vertex(x * 5f + 5f, 5f, -y * 5f - 5f, 0f, 0f));
-                    wallVertexes.add(new Vertex(x * 5f + 5f, 0f, -y * 5f, 1f, 1f));
-
-                    wallVertexIndices.add(wallQuadCounter * 4);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 1);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 2);
-
-                    wallVertexIndices.add(wallQuadCounter * 4);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 3);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 1);
-
-                    wallQuadCounter++;
-                }
-
-                if (topTile.equals(MazeTile.VOID)) {
-                    wallVertexes.add(new Vertex(x * 5f + 5f, 0f, -y * 5f, 0f, 1f));
-                    wallVertexes.add(new Vertex(x * 5f, 5f, -y * 5f, 1f, 0f));
-                    wallVertexes.add(new Vertex(x * 5f + 5f, 5f, -y * 5f, 0f, 0f));
-                    wallVertexes.add(new Vertex(x * 5f, 0f, -y * 5f, 1f, 1f));
-
-                    wallVertexIndices.add(wallQuadCounter * 4);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 1);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 2);
-
-                    wallVertexIndices.add(wallQuadCounter * 4);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 3);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 1);
-
-                    wallQuadCounter++;
-                }
-
-                if (bottomTile.equals(MazeTile.VOID)) {
-                    wallVertexes.add(new Vertex(x * 5f, 0f, -y * 5f - 5f, 0f, 1f));
-                    wallVertexes.add(new Vertex(x * 5f + 5f, 5f, -y * 5f - 5f, 1f, 0f));
-                    wallVertexes.add(new Vertex(x * 5f, 5f, -y * 5f - 5f, 0f, 0f));
-                    wallVertexes.add(new Vertex(x * 5f + 5f, 0f, -y * 5f - 5f, 1f, 1f));
-
-                    wallVertexIndices.add(wallQuadCounter * 4);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 1);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 2);
-
-                    wallVertexIndices.add(wallQuadCounter * 4);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 3);
-                    wallVertexIndices.add(wallQuadCounter * 4 + 1);
-
-                    wallQuadCounter++;
-                }
-            }
-        }
-
-        // ============================================================
-        // Generate VAO, VBO, and EBO buffer objects, and send to GPU
-        // ============================================================
-        wallVaoId = glGenVertexArrays();
-        glBindVertexArray(wallVaoId);
-
-        final float[] wallglvertexes = new float[wallVertexes.size() * 8];
-        for (int i = 0; i < wallVertexes.size(); i++) {
-            final Vertex v = wallVertexes.get(i);
-            wallglvertexes[i * 8] = v.getX();
-            wallglvertexes[i * 8 + 1] = v.getY();
-            wallglvertexes[i * 8 + 2] = v.getZ();
-            wallglvertexes[i * 8 + 3] = v.getTexX();
-            wallglvertexes[i * 8 + 4] = v.getTexY();
-            wallglvertexes[i * 8 + 5] = v.getR();
-            wallglvertexes[i * 8 + 6] = v.getG();
-            wallglvertexes[i * 8 + 7] = v.getB();
-        }
-
-
-        // Create a float buffer of vertices
-        final FloatBuffer wallVertexBuffer = BufferUtils.createFloatBuffer(wallglvertexes.length);
-        wallVertexBuffer.put(wallglvertexes).flip();
-
-        // Create VBO upload the vertex buffer
-        final int wallVboId = glGenBuffers();
-        glBindBuffer(GL_ARRAY_BUFFER, wallVboId);
-        glBufferData(GL_ARRAY_BUFFER, wallVertexBuffer, GL_STATIC_DRAW);
-
-        glVertexPointer(3, GL_FLOAT, 8 * 4, 0);
-        glTexCoordPointer(2, GL_FLOAT, 8 * 4, 3 * 4);
-        glColorPointer(3, GL_FLOAT, 8 * 4, 5 * 4);
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_COLOR_ARRAY);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        glEnableClientState(GL_INDEX_ARRAY);
-
-        glBindVertexArray(0);
-
-
-        final int[] wallglindexes = new int[wallVertexIndices.size()];
-        for (int i = 0; i < wallVertexIndices.size(); i++) {
-            wallglindexes[i] = wallVertexIndices.get(i);
-        }
-        // Create the indices and upload
-        final IntBuffer wallIndexBuffer = BufferUtils.createIntBuffer(wallVertexIndices.size());
-        wallIndexBuffer.put(wallglindexes).flip();
-
-        wallIboId = glGenBuffers();
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wallIboId);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, wallIndexBuffer, GL_STATIC_DRAW);
-
-
-        floorVaoId = glGenVertexArrays();
-        glBindVertexArray(floorVaoId);
-
-        final float[] floorglvertexes = new float[floorVertexes.size() * 8];
-        for (int i = 0; i < floorVertexes.size(); i++) {
-            final Vertex v = floorVertexes.get(i);
-            floorglvertexes[i * 8] = v.getX();
-            floorglvertexes[i * 8 + 1] = v.getY();
-            floorglvertexes[i * 8 + 2] = v.getZ();
-            floorglvertexes[i * 8 + 3] = v.getTexX();
-            floorglvertexes[i * 8 + 4] = v.getTexY();
-            floorglvertexes[i * 8 + 5] = v.getR();
-            floorglvertexes[i * 8 + 6] = v.getG();
-            floorglvertexes[i * 8 + 7] = v.getB();
-        }
-
-
-        // Create a float buffer of vertices
-        final FloatBuffer floorVertexBuffer = BufferUtils.createFloatBuffer(floorglvertexes.length);
-        floorVertexBuffer.put(floorglvertexes).flip();
-
-        // Create VBO upload the vertex buffer
-        final int floorVboId = glGenBuffers();
-        glBindBuffer(GL_ARRAY_BUFFER, floorVboId);
-        glBufferData(GL_ARRAY_BUFFER, floorVertexBuffer, GL_STATIC_DRAW);
-
-        glVertexPointer(3, GL_FLOAT, 8 * 4, 0);
-        glTexCoordPointer(2, GL_FLOAT, 8 * 4, 3 * 4);
-        glColorPointer(3, GL_FLOAT, 8 * 4, 5 * 4);
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_COLOR_ARRAY);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        glEnableClientState(GL_INDEX_ARRAY);
-
-        glBindVertexArray(0);
-
-
-        final int[] floorglindexes = new int[floorVertexIndices.size()];
-        for (int i = 0; i < floorVertexIndices.size(); i++) {
-            floorglindexes[i] = wallVertexIndices.get(i);
-        }
-        // Create the indices and upload
-        final IntBuffer floorIndexBuffer = BufferUtils.createIntBuffer(floorVertexIndices.size());
-        floorIndexBuffer.put(floorglindexes).flip();
-
-        floorIboId = glGenBuffers();
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, floorIboId);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, floorIndexBuffer, GL_STATIC_DRAW);
-
-
-
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_TEXTURE_2D);
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
-
-        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.FREE_MOVING);
-
-        final Vector2i playerStartingPosition = mazeDescriptor.getStartingPosition();
-        player = new Player(
-                sceneManager.getGameManager(),
-                physicsWorld,
-                new Vector3f(
-                        playerStartingPosition.x * 5f + 2.5f,
-                        2.5f,
-                        -playerStartingPosition.y * 5f - 2.5f
-                )
-        );
-
-        uiTextRenderer = TextRendererFactory.createTextRenderer(sceneManager.getGameManager().getWindow(), 20f);
-        expressionSolvingTextRenderer = TextRendererFactory.createTextRenderer(sceneManager.getGameManager().getWindow(), 40f);
+        prepareUi();
     }
 
     @Override
@@ -565,21 +122,23 @@ public class DungeonScene implements Scene {
             }
         }
 
-
         if (!inSolvingExpressionMode && !inInstructionsMode) {
             player.updatePosition(dt);
 
             if (sceneManager.getGameManager().getInputManager().isKeyPressed(GLFW_KEY_F)) {
-                final WorldTileDescriptor tileDescriptorOfPlayer = getWorldTileDescriptor(player.getPosition());
-                if (tileDescriptorOfPlayer instanceof DoorTileDescriptor) {
-                    if (!inSolvingExpressionMode) {
-                        inSolvingExpressionMode = true;
-                        solvingExpression = Expression.generate();
-                        enteredExpressionResult = "";
+                final DynamicObject dynamicObject = getDynamicObject(player.getPosition());
+
+                if (dynamicObject != null) {
+                    if (dynamicObject.getType().equals(DynamicObjectType.DOOR)) {
+                        if (!inSolvingExpressionMode) {
+                            inSolvingExpressionMode = true;
+                            solvingExpression = Expression.generate();
+                            enteredExpressionResult = "";
+                        }
                     }
-                }
-                if (tileDescriptorOfPlayer instanceof ExitTileDescriptor) {
-                    sceneManager.switchScene(SceneManager.SceneIdentifier.ESCAPED_SCENE);
+                    if (dynamicObject.getType().equals(DynamicObjectType.EXIT_PORTAL)) {
+                        sceneManager.switchScene(SceneManager.SceneIdentifier.ESCAPED_SCENE);
+                    }
                 }
             }
         }
@@ -632,9 +191,9 @@ public class DungeonScene implements Scene {
                 keyPressed = true;
                 final int parsedEnteredResult = Integer.parseInt(enteredExpressionResult);
                 if (solvingExpression.isResultCorrect(parsedEnteredResult)) {
-                    final WorldTileDescriptor tileDescriptorOfPlayer = getWorldTileDescriptor(player.getPosition());
-                    dynamicTiles.remove(tileDescriptorOfPlayer);
-                    physicsWorld.getObjects().remove(((DoorTileDescriptor) tileDescriptorOfPlayer).getBoundingBox());
+                    final DynamicObject dynamicObject = getDynamicObject(player.getPosition());
+                    allDynamicObjects.remove(dynamicObject);
+                    physicsWorld.getObjects().remove(dynamicObject.getBoundingBox());
 
                     inSolvingExpressionMode = false;
                     solvingExpression = null;
@@ -669,12 +228,431 @@ public class DungeonScene implements Scene {
     }
 
 
-    private WorldTileDescriptor getWorldTileDescriptor(Vector3f position) {
-        final int positionXInMaze = (int) (position.x / 5);
-        final int positionYInMaze = (int) (-position.z / 5);
+    private DynamicObject getDynamicObject(Vector3f positionInWorld) {
+        final int positionXInMaze = (int) (positionInWorld.x / 5);
+        final int positionYInMaze = (int) (-positionInWorld.z / 5);
 
-        return builtMaze[positionXInMaze][positionYInMaze];
+        return dynamicObjectsInWorld[positionXInMaze][positionYInMaze];
     }
+
+
+    private void loadTextures() {
+        try {
+            wallTexture = new OGLTexture2D("assets/texture/bricks.png");
+            floorTexture = new OGLTexture2D("assets/texture/pavement.png");
+            doorTexture = new OGLTexture2D("assets/texture/locked-doors.png");
+            exitPortalTexture = new OGLTexture2D("assets/texture/portal.png");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private FloatBuffer extractVertexes(List<Vertex> vertexes) {
+        final float[] extractedVertexes = new float[vertexes.size() * 8];
+        for (int i = 0; i < vertexes.size(); i++) {
+            final Vertex v = vertexes.get(i);
+            extractedVertexes[i * 8] = v.getPosition().x;
+            extractedVertexes[i * 8 + 1] = v.getPosition().y;
+            extractedVertexes[i * 8 + 2] = v.getPosition().z;
+            extractedVertexes[i * 8 + 3] = v.getTextCoords().x;
+            extractedVertexes[i * 8 + 4] = v.getTextCoords().y;
+            extractedVertexes[i * 8 + 5] = v.getColor().x;
+            extractedVertexes[i * 8 + 6] = v.getColor().y;
+            extractedVertexes[i * 8 + 7] = v.getColor().z;
+        }
+
+        final FloatBuffer buffer = BufferUtils.createFloatBuffer(extractedVertexes.length);
+        buffer.put(extractedVertexes).flip();
+        return buffer;
+    }
+
+    private void buildBackWall(List<Vertex> wallVertexes, List<Integer> wallVertexIndices, int wallQuadCounter, int x, int y) {
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(0f, 1f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(1f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(0f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(1f, 1f)));
+
+        addQuadVertexIndices(wallVertexIndices, wallQuadCounter);
+    }
+
+    private void addQuadVertexIndices(List<Integer> vertexIndices, int quadCounter) {
+        vertexIndices.add(quadCounter * 4);
+        vertexIndices.add(quadCounter * 4 + 1);
+        vertexIndices.add(quadCounter * 4 + 2);
+
+        vertexIndices.add(quadCounter * 4);
+        vertexIndices.add(quadCounter * 4 + 3);
+        vertexIndices.add(quadCounter * 4 + 1);
+    }
+
+    private void buildFrontWall(List<Vertex> wallVertexes, List<Integer> wallVertexIndices, int wallQuadCounter, int x, int y) {
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE), new Vector2f(0f, 1f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE), new Vector2f(1f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE), new Vector2f(0f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE), new Vector2f(1f, 1f)));
+
+        addQuadVertexIndices(wallVertexIndices, wallQuadCounter);
+    }
+
+    private void buildRightWall(List<Vertex> wallVertexes, List<Integer> wallVertexIndices, int wallQuadCounter, int x, int y) {
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(0f, 1f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE), new Vector2f(1f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(0f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE), new Vector2f(1f, 1f)));
+
+        addQuadVertexIndices(wallVertexIndices, wallQuadCounter);
+    }
+
+    private void buildLeftWall(List<Vertex> wallVertexes, List<Integer> wallVertexIndices, int wallQuadCounter, int x, int y) {
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE), new Vector2f(0f, 1f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(1f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE), new Vector2f(0f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(1f, 1f)));
+
+        addQuadVertexIndices(wallVertexIndices, wallQuadCounter);
+    }
+
+    private void buildCeiling(List<Vertex> wallVertexes, List<Integer> wallVertexIndices, int wallQuadCounter, int x, int y) {
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(0f, 1f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE), new Vector2f(1f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE), new Vector2f(0f, 0f)));
+        wallVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(1f, 1f)));
+
+        addQuadVertexIndices(wallVertexIndices, wallQuadCounter);
+    }
+
+    private void buildFloor(List<Vertex> floorVertexes, List<Integer> floorVertexIndices, int floorQuadCounter, int x, int y) {
+        floorVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE), new Vector2f(0f, 1f)));
+        floorVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(1f, 0f)));
+        floorVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE - TILE_WORLD_SIZE), new Vector2f(0f, 0f)));
+        floorVertexes.add(new Vertex(new Vector3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE), new Vector2f(1f, 1f)));
+
+        addQuadVertexIndices(floorVertexIndices, floorQuadCounter);
+    }
+
+    private void buildExitPortal(int x, int y) {
+        final int dlIndex = glGenLists(1);
+
+        glNewList(dlIndex, GL_COMPILE);
+
+        // front
+        glBegin(GL_TRIANGLE_STRIP);
+        glTexCoord2f(0f, 1f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE - 2f);
+        glTexCoord2f(0.84f, 1f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE - 2f);
+        glTexCoord2f(0f, 0f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE - 2f);
+        glTexCoord2f(0.84f, 0f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, TILE_WORLD_SIZE, -y * TILE_WORLD_SIZE - 2f);
+        glEnd();
+
+        // back
+        glBegin(GL_TRIANGLE_STRIP);
+        glTexCoord2f(0.84f, 1f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * TILE_WORLD_SIZE + TILE_WORLD_SIZE, 0f, -y * TILE_WORLD_SIZE - 3f);
+        glTexCoord2f(0f, 1f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f, 0f, -y * 5f - 3f);
+        glTexCoord2f(0.84f, 0f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f + 5f, 5f, -y * 5f - 3f);
+        glTexCoord2f(0f, 0f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f, 5f, -y * 5f - 3f);
+        glEnd();
+
+        // left side
+        glBegin(GL_TRIANGLE_STRIP);
+        glTexCoord2f(0.84f, 1f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f, 0f, -y * 5f - 3f);
+        glTexCoord2f(1f, 1f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f, 0f, -y * 5f - 2f);
+        glTexCoord2f(0.84f, 0f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f, 5f, -y * 5f - 3f);
+        glTexCoord2f(1f, 0f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f, 5f, -y * 5f - 2f);
+        glEnd();
+
+        // right side
+        glBegin(GL_TRIANGLE_STRIP);
+        glTexCoord2f(0.84f, 1f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2f);
+        glTexCoord2f(1f, 1f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f + 5f, 0f, -y * 5f - 3f);
+        glTexCoord2f(0.84f, 0f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2f);
+        glTexCoord2f(1f, 0f);
+        glColor3f(1f, 1f, 1f);
+        glVertex3f(x * 5f + 5, 5f, -y * 5f - 3f);
+        glEnd();
+
+        glEndList();
+
+        final BoundingBox boundingBox = new BoundingBox(
+                x * 5f,
+                x * 5f + 5f,
+                y * 5f + 2f,
+                y * 5f + 3f
+        );
+        physicsWorld.getObjects().add(boundingBox);
+
+        final DynamicObject exitPortalObject = new DynamicObject(DynamicObjectType.EXIT_PORTAL, dlIndex, boundingBox, exitPortalTexture);
+        allDynamicObjects.add(exitPortalObject);
+        dynamicObjectsInWorld[x][y] = exitPortalObject;
+    }
+
+    private void buildDoor(int x, int y, MazeTile leftTile, MazeTile rightTile, MazeTile topTile, MazeTile bottomTile) {
+        final int dlIndex = glGenLists(1);
+        BoundingBox boundingBox = null;
+
+        if ((leftTile.equals(MazeTile.VOID)) && (rightTile.equals(MazeTile.VOID))) {
+            glNewList(dlIndex, GL_COMPILE);
+            glBegin(GL_TRIANGLE_STRIP);
+
+            glTexCoord2f(0f, 1f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f, 0f, -y * 5f - 2.4f);
+            glTexCoord2f(1f, 1f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2.4f);
+            glTexCoord2f(0f, 0f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f, 5f, -y * 5f - 2.4f);
+            glTexCoord2f(1f, 0f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2.4f);
+
+            glEnd();
+
+            glBegin(GL_TRIANGLE_STRIP);
+
+            glTexCoord2f(1f, 1f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 5f, 0f, -y * 5f - 2.6f);
+            glTexCoord2f(0f, 1f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f, 0f, -y * 5f - 2.6f);
+            glTexCoord2f(1f, 0f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 5f, 5f, -y * 5f - 2.6f);
+            glTexCoord2f(0f, 0f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f, 5f, -y * 5f - 2.6f);
+
+            glEnd();
+            glEndList();
+
+            boundingBox = new BoundingBox(
+                    x * 5f,
+                    x * 5f + 5f,
+                    y * 5f + 2.4f,
+                    y * 5f + 2.6f
+            );
+            physicsWorld.getObjects().add(boundingBox);
+        } else if ((topTile.equals(MazeTile.VOID)) && (bottomTile.equals(MazeTile.VOID))) {
+            glNewList(dlIndex, GL_COMPILE);
+            glBegin(GL_TRIANGLE_STRIP);
+
+            glTexCoord2f(0f, 1f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 2.4f, 0f, -y * 5f - 5f);
+            glTexCoord2f(1f, 1f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 2.4f, 0f, -y * 5f);
+            glTexCoord2f(0f, 0f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 2.4f, 5f, -y * 5f - 5f);
+            glTexCoord2f(1f, 0f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 2.4f, 5f, -y * 5f);
+
+            glEnd();
+
+            glBegin(GL_TRIANGLE_STRIP);
+
+            glTexCoord2f(1f, 1f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 2.6f, 0f, -y * 5f);
+            glTexCoord2f(0f, 1f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 2.6f, 0f, -y * 5f - 5f);
+            glTexCoord2f(1f, 0f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 2.6f, 5f, -y * 5f);
+            glTexCoord2f(0f, 0f);
+            glColor3f(1f, 1f, 1f);
+            glVertex3f(x * 5f + 2.6f, 5f, -y * 5f - 5f);
+
+            glEnd();
+            glEndList();
+
+            boundingBox = new BoundingBox(
+                    x * 5f + 2.4f,
+                    x * 5f + 2.6f,
+                    y * 5f,
+                    y * 5f + 5f
+            );
+            physicsWorld.getObjects().add(boundingBox);
+        }
+
+        final DynamicObject doorObject = new DynamicObject(DynamicObjectType.DOOR, dlIndex, boundingBox, doorTexture);
+        allDynamicObjects.add(doorObject);
+        dynamicObjectsInWorld[x][y] = doorObject;
+    }
+
+    private void fillIbo(int iboId, List<Integer> vertexIndices) {
+        final int[] indicesArray = new int[vertexIndices.size()];
+        for (int i = 0; i < vertexIndices.size(); i++) {
+            indicesArray[i] = vertexIndices.get(i);
+        }
+
+        final IntBuffer indexBuffer = BufferUtils.createIntBuffer(vertexIndices.size());
+        indexBuffer.put(indicesArray).flip();
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, iboId);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexBuffer, GL_STATIC_DRAW);
+    }
+
+    private void fillVao(int vaoId, FloatBuffer vertexBuffer) {
+        glBindVertexArray(vaoId);
+
+        final int vboId = glGenBuffers();
+        glBindBuffer(GL_ARRAY_BUFFER, vboId);
+        glBufferData(GL_ARRAY_BUFFER, vertexBuffer, GL_STATIC_DRAW);
+
+        glVertexPointer(3, GL_FLOAT, 8 * 4, 0);
+        glTexCoordPointer(2, GL_FLOAT, 8 * 4, 3 * 4);
+        glColorPointer(3, GL_FLOAT, 8 * 4, 5 * 4);
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glEnableClientState(GL_COLOR_ARRAY);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glEnableClientState(GL_INDEX_ARRAY);
+
+        glBindVertexArray(0);
+    }
+
+    private void buildWorld(MazeTile[][] mazeRecipe) {
+        final List<Vertex> wallVertexes = new ArrayList<>();
+        final List<Integer> wallVertexIndices = new ArrayList<>();
+
+        final List<Vertex> floorVertexes = new ArrayList<>();
+        final List<Integer> floorVertexIndices = new ArrayList<>();
+
+        int wallQuadCounter = 0;
+        int floorQuadCounter = 0;
+        for (int x = 0; x < MAZE_SIZE; x++) {
+            for (int y = 0; y < MAZE_SIZE; y++) {
+                final MazeTile tile = mazeRecipe[x][y];
+
+                // create only bounding box for wall tile
+                if (tile.equals(MazeTile.VOID)) {
+                    physicsWorld.getObjects().add(new BoundingBox(
+                            x * 5f,
+                            x * 5f + 5f,
+                            y * 5f,
+                            y * 5f + 5f
+                    ));
+                    continue;
+                }
+
+                final MazeTile leftTile = mazeRecipe[x - 1][y];
+                final MazeTile rightTile = mazeRecipe[x + 1][y];
+                final MazeTile frontTile = mazeRecipe[x][y - 1];
+                final MazeTile backTile = mazeRecipe[x][y + 1];
+
+                if (tile.equals(MazeTile.DOOR)) {
+                    buildDoor(x, y, leftTile, rightTile, frontTile, backTile);
+                }
+                if (tile.equals(MazeTile.EXIT_PORTAL)) {
+                    buildExitPortal(x, y);
+                }
+
+                buildFloor(floorVertexes, floorVertexIndices, floorQuadCounter, x, y);
+                floorQuadCounter++;
+
+                buildCeiling(wallVertexes, wallVertexIndices, wallQuadCounter, x, y);
+                wallQuadCounter++;
+
+                if (leftTile.equals(MazeTile.VOID)) {
+                    buildLeftWall(wallVertexes, wallVertexIndices, wallQuadCounter, x, y);
+                    wallQuadCounter++;
+                }
+
+                if (rightTile.equals(MazeTile.VOID)) {
+                    buildRightWall(wallVertexes, wallVertexIndices, wallQuadCounter, x, y);
+                    wallQuadCounter++;
+                }
+
+                if (frontTile.equals(MazeTile.VOID)) {
+                    buildFrontWall(wallVertexes, wallVertexIndices, wallQuadCounter, x, y);
+                    wallQuadCounter++;
+                }
+
+                if (backTile.equals(MazeTile.VOID)) {
+                    buildBackWall(wallVertexes, wallVertexIndices, wallQuadCounter, x, y);
+                    wallQuadCounter++;
+                }
+            }
+        }
+
+        wallIndicesCount = wallVertexIndices.size();
+
+        wallVaoId = glGenVertexArrays();
+        fillVao(wallVaoId, extractVertexes(wallVertexes));
+        wallIboId = glGenBuffers();
+        fillIbo(wallIboId, wallVertexIndices);
+
+        floorIndicesCount = floorVertexIndices.size();
+
+        floorVaoId = glGenVertexArrays();
+        fillVao(floorVaoId, extractVertexes(floorVertexes));
+        floorIboId = glGenBuffers();
+        fillIbo(floorIboId, floorVertexIndices);
+    }
+
+    private void prepareUi() {
+        uiTextRenderer = TextRendererFactory.createTextRenderer(sceneManager.getGameManager().getWindow(), 20f);
+        expressionSolvingTextRenderer = TextRendererFactory.createTextRenderer(sceneManager.getGameManager().getWindow(), 40f);
+    }
+
+    private void createPlayer(MazeDescriptor mazeDescriptor) {
+        sceneManager.getGameManager().getInputManager().setMouseMode(InputManager.MouseMode.FREE_MOVING);
+
+        final Vector2i playerStartingPosition = mazeDescriptor.getStartingPosition();
+        player = new Player(
+                sceneManager.getGameManager(),
+                physicsWorld,
+                new Vector3f(
+                        playerStartingPosition.x * 5f + 2.5f,
+                        2.5f,
+                        -playerStartingPosition.y * 5f - 2.5f
+                )
+        );
+    }
+
+    private void setupCommonRenderOptions() {
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_TEXTURE_2D);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+    }
+
 
     /**
      * Renders whole game world (dungeon)
@@ -699,7 +677,7 @@ public class DungeonScene implements Scene {
         wallTexture.bind();
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glDrawElements(GL_TRIANGLES, wallVertexIndices.size(), GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, wallIndicesCount, GL_UNSIGNED_INT, 0);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
@@ -711,22 +689,17 @@ public class DungeonScene implements Scene {
         floorTexture.bind();
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glDrawElements(GL_TRIANGLES, floorVertexIndices.size(), GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, floorIndicesCount, GL_UNSIGNED_INT, 0);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
         // render dynamic objects
-        // todo: separate dynamic objects??
-        dynamicTiles.forEach(tile -> {
-            if (!(tile instanceof DoorTileDescriptor)) {
-                return;
-            }
-
-            tile.getTexture().bind();
+        allDynamicObjects.forEach(object -> {
+            object.getTexture().bind();
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glCallList(((DoorTileDescriptor) tile).getDisplayList());
+            glCallList(object.getDisplayListId());
         });
     }
 
@@ -734,14 +707,19 @@ public class DungeonScene implements Scene {
      * Renders whole UI base on current game state
      */
     private void renderUi() {
-        if (!inInstructionsMode) {
-            renderInfoUi();
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        if (inSolvingExpressionMode) {
+            renderExpressionSolvingUi();
         }
         if (inInstructionsMode) {
             renderInstructionsUi();
         }
-        if (inSolvingExpressionMode) {
-            renderExpressionSolvingUi();
+        if (!inInstructionsMode) {
+            renderInfoUi();
         }
     }
 
@@ -761,23 +739,18 @@ public class DungeonScene implements Scene {
      * Renders UI for currently solving expression
      */
     private void renderExpressionSolvingUi() {
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-
         glBegin(GL_TRIANGLE_STRIP);
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(-0.6f, -0.5f, 0f);
+        glColor3f(0f, 0f, 0f);
+        glVertex3f(-0.6f, -0.5f, 0f);
 
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(0.6f, -0.5f, 0f);
+        glColor3f(0f, 0f, 0f);
+        glVertex3f(0.6f, -0.5f, 0f);
 
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(-0.6f, 0.5f, 0f);
+        glColor3f(0f, 0f, 0f);
+        glVertex3f(-0.6f, 0.5f, 0f);
 
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(0.6f, 0.5f, 0f);
+        glColor3f(0f, 0f, 0f);
+        glVertex3f(0.6f, 0.5f, 0f);
         glEnd();
 
         expressionSolvingTextRenderer.setColor(Color.WHITE);
@@ -790,84 +763,22 @@ public class DungeonScene implements Scene {
      * Renders UI for instructions
      */
     private void renderInstructionsUi() {
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-
         glBegin(GL_TRIANGLE_STRIP);
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(-0.7f, -0.4f, 0f);
+        glColor3f(0f, 0f, 0f);
+        glVertex3f(-0.7f, -0.4f, 0f);
 
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(0.7f, -0.4f, 0f);
+        glColor3f(0f, 0f, 0f);
+        glVertex3f(0.7f, -0.4f, 0f);
 
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(-0.7f, 0.4f, 0f);
+        glColor3f(0f, 0f, 0f);
+        glVertex3f(-0.7f, 0.4f, 0f);
 
-            glColor3f(0f, 0f, 0f);
-            glVertex3f(0.7f, 0.4f, 0f);
+        glColor3f(0f, 0f, 0f);
+        glVertex3f(0.7f, 0.4f, 0f);
         glEnd();
 
         expressionSolvingTextRenderer.setColor(Color.WHITE);
         expressionSolvingTextRenderer.addStr2D(290, 275, "Find an exit portal");
         expressionSolvingTextRenderer.addStr2D(230, 335, "to escape this dungeon!");
-    }
-
-    @Data
-    private class Vertex {
-        private final float x;
-        private final float y;
-        private final float z;
-        private final float texX;
-        private final float texY;
-        private final float r = 1f;
-        private final float g = 1f;
-        private final float b = 1f;
-    }
-
-    @Data
-    @RequiredArgsConstructor
-    private static class WorldTileDescriptor {
-        private final OGLTexture2D texture;
-
-        private WorldTileDescriptor() {
-            this.texture = null;
-        }
-    }
-
-    @Data
-    @EqualsAndHashCode(callSuper = true)
-    private static class FloorTileDescriptor extends WorldTileDescriptor {
-
-        public FloorTileDescriptor(OGLTexture2D texture) {
-            super(texture);
-        }
-    }
-
-    @Data
-    @EqualsAndHashCode(callSuper = true)
-    private static class DoorTileDescriptor extends WorldTileDescriptor {
-        private final int displayList;
-        private final BoundingBox boundingBox;
-
-        public DoorTileDescriptor() {
-            throw new RuntimeException();
-        }
-
-        public DoorTileDescriptor(int displayList, BoundingBox boundingBox, OGLTexture2D texture) {
-            super(texture);
-            this.displayList = displayList;
-            this.boundingBox = boundingBox;
-        }
-    }
-
-    @Data
-    @EqualsAndHashCode(callSuper = true)
-    private static class ExitTileDescriptor extends DoorTileDescriptor {
-
-        public ExitTileDescriptor(int displayList, BoundingBox boundingBox, OGLTexture2D texture) {
-            super(displayList, boundingBox, texture);
-        }
     }
 }
